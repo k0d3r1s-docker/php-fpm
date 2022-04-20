@@ -1,0 +1,45 @@
+FROM k0d3r1s/php-fpm:unstable
+
+USER    root
+
+RUN     \
+        set -eux \
+&&      apk add --update --no-cache --no-progress --upgrade -X http://dl-cdn.alpinelinux.org/alpine/edge/testing autoconf g++ php81-dev \
+&&      mkdir --parents /home/vairogs/extensions \
+&&      cd /home/vairogs/extensions \
+&&      wget -O /usr/local/bin/docker-php-ext-enable https://raw.githubusercontent.com/k0d3r1s-forks/php/master/8.1/alpine3.15/fpm/docker-php-ext-enable \
+&&      chmod -R 777 /usr/local/bin/docker-php-ext-enable \
+&&      git clone --single-branch https://github.com/k0d3r1s-forks/xdebug.git \
+&&      ( \
+            cd  xdebug \
+            &&  phpize \
+            &&  ./configure --enable-xdebug \
+            &&  make -j "$(expr $(nproc) / 2)" \
+            &&  make install \
+            &&  cd .. || exit \
+        ) \
+&&      docker-php-ext-enable xdebug \
+&&      git clone --single-branch https://github.com/runkit7/runkit7.git \
+&&      ( \
+            cd  runkit7 \
+            &&  phpize \
+            &&  ./configure \
+            &&  make -j "$(expr $(nproc) / 2)" \
+            &&  make install \
+            &&  cd .. || exit \
+        ) \
+&&      docker-php-ext-enable runkit7 \
+&&      apk del --purge --no-cache autoconf g++ php81-dev \
+&&      echo xdebug.mode=debug,coverage >> /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini \
+&&      echo xdebug.discover_client_host=1 >> /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini \
+&&      echo runkit.internal_override=1 >> /usr/local/etc/php/conf.d/docker-php-ext-runkit7.ini \
+&&      rm -rf \
+            /tmp/* \
+            /var/cache/* \
+            ~/.pearrc \
+            /tmp/* \
+            /home/vairogs/extensions \
+            /usr/local/php/man/* \
+            /usr/local/bin/docker-php-ext-enable
+
+USER    vairogs

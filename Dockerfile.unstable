@@ -1,0 +1,248 @@
+FROM    k0d3r1s/alpine:unstable
+
+ARG     version
+
+ENV     PHPIZE_DEPS autoconf dpkg-dev dpkg file g++ gcc libc-dev make pkgconf re2c
+ENV     PHP_INI_DIR /usr/local/etc/php
+ENV     PHP_CFLAGS "-fstack-protector-strong -fpic -fpie -O2 -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64"
+ENV     PHP_CPPFLAGS "$PHP_CFLAGS"
+ENV     PHP_LDFLAGS "-Wl,-O1 -pie"
+ENV     PHP_VERSION ${version}
+
+COPY    ping.sh /usr/local/bin/php-fpm-ping
+COPY    ./src/ /usr/src/php
+
+ENTRYPOINT ["docker-php-entrypoint"]
+
+STOPSIGNAL SIGQUIT
+
+EXPOSE 9000
+
+WORKDIR /home/vairogs
+
+RUN     \
+        set -eux \
+&&      apk upgrade --no-cache --update --no-progress -X http://dl-cdn.alpinelinux.org/alpine/edge/testing \
+&&      apk add --update --no-cache --no-progress --upgrade -X http://dl-cdn.alpinelinux.org/alpine/edge/testing wget alpine-sdk argon2-dev autoconf coreutils \
+        curl-dev dpkg librdkafka librdkafka-dev dpkg-dev file freetype freetype-dev g++ gcc git gnupg hiredis hiredis-dev icu icu-dev icu-libs imagemagick \
+        bzip2 bzip2-dev gnu-libiconv-dev imagemagick-dev libc-dev libedit-dev libjpeg-turbo libjpeg-turbo-dev libpng libpng-dev libsodium-dev libtool gnu-libiconv \
+        libwebp libwebp-dev libx11 libxau libxdmcp libxml2 libxml2-dev libxpm libxpm-dev libzip libzip-dev tidyhtml tidyhtml-dev gmp gmp-dev \
+        linux-headers make oniguruma-dev openssl openssl-dev pcre pcre-dev php81-dev php81-pear pinentry pkgconf libgomp libuv libuv-dev \
+        postgresql-dev postgresql-libs re2c sqlite-dev tar xz zip zstd-dev zstd-libs openssh-client fcgi liblzf liblzf-dev bison lz4 lz4-dev lz4-libs \
+&&      wget -O /home/vairogs/installer https://getcomposer.org/installer \
+&&      wget -O /usr/local/bin/wait-for-it https://raw.githubusercontent.com/vishnubob/wait-for-it/master/wait-for-it.sh \
+&&      wget -O /usr/local/bin/pickle.phar https://github.com/FriendsOfPHP/pickle/releases/latest/download/pickle.phar \
+&&      wget -O /usr/local/bin/docker-php-entrypoint https://raw.githubusercontent.com/k0d3r1s-forks/php/master/8.1/alpine3.15/fpm/docker-php-entrypoint \
+&&      wget -O /usr/local/bin/docker-php-ext-enable https://raw.githubusercontent.com/k0d3r1s-forks/php/master/8.1/alpine3.15/fpm/docker-php-ext-enable \
+&&      wget -O /usr/local/bin/docker-php-source https://raw.githubusercontent.com/k0d3r1s-forks/php/master/8.1/alpine3.15/fpm/docker-php-source \
+&&      wget -O /usr/local/bin/php-fpm-healthcheck https://raw.githubusercontent.com/renatomefi/php-fpm-healthcheck/master/php-fpm-healthcheck \
+&&      wget -O /usr/local/bin/docker-php-ext-install https://raw.githubusercontent.com/k0d3r1s-forks/php/master/8.1/alpine3.15/fpm/docker-php-ext-install \
+&&      wget -O /usr/local/bin/docker-php-ext-configure https://raw.githubusercontent.com/k0d3r1s-forks/php/master/8.1/alpine3.15/fpm/docker-php-ext-configure \
+&&      chmod -R 777 /usr/local/bin \
+&&      chmod 777 /home/vairogs/installer \
+&&      mkdir --parents "$PHP_INI_DIR/conf.d" \
+&&      [ ! -d /var/www/html ]; \
+        mkdir --parents /var/www/html \
+&&      chown vairogs:vairogs /var/www/html \
+&&      chmod 777 -R /var/www/html \
+&&      export \
+            CFLAGS="$PHP_CFLAGS" \
+            CPPFLAGS="$PHP_CPPFLAGS" \
+            LDFLAGS="$PHP_LDFLAGS" \
+&&      cd /usr/src/php \
+&&      gnuArch="$(dpkg-architecture --query DEB_BUILD_GNU_TYPE)" \
+&&      ./buildconf --force \
+&&      ./configure \
+            --build="$gnuArch" \
+            --with-config-file-path="$PHP_INI_DIR" \
+            --with-config-file-scan-dir="$PHP_INI_DIR/conf.d" \
+            --disable-cgi \
+            --disable-ftp \
+            --disable-short-tags \
+            --disable-mysqlnd \
+            --disable-phpdbg \
+            --enable-bcmath \
+            --enable-calendar \
+            --enable-exif \
+            --enable-fpm \
+            --enable-huge-code-pages \
+            --enable-intl \
+            --enable-mbstring \
+            --enable-opcache \
+            --enable-option-checking=fatal \
+            --enable-pcntl \
+            --enable-sysvsem \
+            --enable-sysvshm \
+            --enable-sysvmsg \
+            --enable-shmop \
+            --enable-soap \
+            --enable-sockets \
+            --with-bz2 \
+            --with-curl \
+            --with-fpm-group=vairogs \
+            --with-fpm-user=vairogs \
+            --with-gmp \
+            --with-libedit \
+            --with-mhash \
+            --with-openssl \
+            --with-password-argon2 \
+            --with-pear \
+            --with-pic \
+            --with-sodium=shared \
+            --with-tidy \
+            --with-zlib \
+            --without-sqlite3 \
+            --without-pdo-sqlite \
+&&      make -j "$(expr $(nproc) / 2)" \
+&&      find -type f -name '*.a' -delete \
+&&      make install \
+&&      find /usr/local/bin /usr/local/sbin -type f -perm +0111 -exec strip --strip-all '{}' + || true \
+&&      make clean \
+&&      mkdir --parents "$PHP_INI_DIR" \
+&&      cp -v php.ini-* "$PHP_INI_DIR/" \
+&&      cd / \
+&&      runDeps="$( \
+            scanelf --needed --nobanner --format '%n#p' --recursive /usr/local \
+            | tr ',' '\n' \
+            | sort -u \
+            | awk 'system("[ -e /usr/local/lib/" $1 " ]") == 0 { next } { print "so:" $1 }' \
+        )" \
+&&      apk add --no-cache $runDeps \
+&&      pecl update-channels \
+&&      rm -rf \
+            /tmp/pear \
+            ~/.pearrc \
+&&      php --version \
+&&      mkdir --parents "$PHP_INI_DIR/conf.d" \
+&&      chmod -R 777 /usr/local/bin \
+&&      docker-php-ext-enable sodium \
+&&      mkdir --parents --mode=777 --verbose /run/php-fpm \
+&&      mkdir --parents /var/www/html/config \
+&&      touch /run/php-fpm/.keep_dir \
+&&      cat /home/vairogs/installer | php -- --install-dir=/usr/local/bin --filename=composer \
+&&      composer self-update --snapshot \
+&&      chmod +x /usr/local/bin/pickle.phar \
+&&      export CFLAGS="$PHP_CFLAGS" CPPFLAGS="$PHP_CPPFLAGS" LDFLAGS="$PHP_LDFLAGS" \
+&&      docker-php-ext-configure gd --with-freetype=/usr/include/ --with-jpeg=/usr/include/ --with-webp=/usr/include/ \
+&&      pickle.phar install -n inotify \
+&&      pickle.phar install -n msgpack \
+&&      pickle.phar install -n lzf \
+&&      docker-php-ext-install pdo_pgsql pgsql gd zip \
+&&      docker-php-ext-enable gd msgpack inotify opcache pdo_pgsql pgsql zip lzf \
+&&      mkdir --parents /home/vairogs/extensions \
+&&      cd /home/vairogs/extensions \
+&&      git clone --single-branch https://github.com/krakjoe/apcu.git \
+&&      ( \
+            cd  apcu \
+            &&  phpize \
+            &&  ./configure \
+            &&  make -j "$(expr $(nproc) / 2)" \
+            &&  make install \
+            &&  cd .. || exit \
+        ) \
+&&      docker-php-ext-enable apcu \
+&&      git clone --single-branch https://github.com/igbinary/igbinary.git \
+&&      ( \
+            cd  igbinary \
+            &&  phpize \
+            &&  ./configure CFLAGS="-O2 -g" --enable-igbinary \
+            &&  make -j "$(expr $(nproc) / 2)" \
+            &&  make install \
+            &&  cd .. || exit \
+        ) \
+&&      docker-php-ext-enable igbinary \
+&&      git clone --single-branch https://github.com/phpredis/phpredis.git \
+&&      ( \
+            cd  phpredis \
+            &&  phpize \
+            &&  ./configure --enable-redis-igbinary --enable-redis-zstd --enable-redis-msgpack --enable-redis-lzf --with-liblzf --enable-redis-lz4 --with-liblz4 \
+            &&  make -j "$(expr $(nproc) / 2)" \
+            &&  make install \
+            &&  cd .. || exit \
+        ) \
+&&      docker-php-ext-enable redis \
+&&      git clone --single-branch https://github.com/k0d3r1s-forks/phpiredis.git \
+&&      ( \
+            cd  phpiredis \
+            &&  phpize \
+            &&  ./configure --enable-phpiredis \
+            &&  make -j "$(expr $(nproc) / 2)" \
+            &&  make install \
+            &&  cd .. || exit \
+        ) \
+&&      docker-php-ext-enable phpiredis \
+&&      git clone --branch develop --single-branch https://github.com/Imagick/imagick.git \
+&&      ( \
+            cd  imagick \
+            &&  phpize \
+            &&  ./configure \
+            &&  make -j "$(expr $(nproc) / 2)" \
+            &&  make install \
+            &&  cd .. || exit \
+        ) \
+&&      docker-php-ext-enable imagick \
+&&      git clone --single-branch https://github.com/arnaud-lb/php-rdkafka.git \
+&&      ( \
+            cd  php-rdkafka \
+            &&  phpize \
+            &&  ./configure \
+            &&  make all -j "$(expr $(nproc) / 2)" \
+            &&  make install \
+            &&  cd .. || exit \
+        ) \
+&&      docker-php-ext-enable rdkafka \
+&&      git clone --single-branch https://github.com/bwoebi/php-uv.git \
+&&      ( \
+            cd  php-uv \
+            &&  phpize \
+            &&  ./configure \
+            &&  make -j "$(expr $(nproc) / 2)" \
+            &&  make install \
+            &&  cd .. || exit \
+        ) \
+&&      docker-php-ext-enable uv \
+&&      touch /var/www/html/config/preload.php \
+&&      apk del --purge --no-cache alpine-sdk argon2-dev autoconf coreutils curl-dev dpkg dpkg-dev file freetype-dev g++ gcc gnupg gnu-libiconv-dev \
+        hiredis-dev icu-dev imagemagick-dev libc-dev libedit-dev libjpeg-turbo-dev libpng-dev libsodium-dev tidyhtml-dev librdkafka-dev \
+        libwebp-dev libx11-dev libxau-dev libxdmcp-dev libxml2-dev libxpm-dev libzip-dev linux-headers oniguruma-dev bison bzip2-dev  liburing-dev \
+        openssl-dev pcre-dev php81-dev php81-pear pkgconf postgresql-dev re2c sqlite-dev zstd-dev liblzf-dev openssh* xz libuv-dev gmp-dev lz4-dev \
+&&      rm -rf \
+            ~/.pearrc \
+            /home/vairogs/installer \
+            /home/vairogs/extensions \
+            /tmp/* \
+            /usr/local/bin/docker-php-ext-configure \
+            /usr/local/bin/docker-php-ext-enable \
+            /usr/local/bin/docker-php-ext-install \
+            /usr/local/bin/docker-php-source \
+            /usr/local/bin/pickle.phar \
+            /usr/local/bin/phpdbg \
+            /usr/local/etc/php-fpm.conf \
+            /usr/local/etc/php-fpm.d/* \
+            /usr/local/etc/php/conf.d/docker-php-ext-opcache.ini \
+            /usr/local/etc/php/php.ini \
+            /usr/local/php/man/* \
+            /usr/src/php \
+            /var/cache/* \
+            /usr/local/etc/php/php.ini-development \
+            /usr/local/etc/php/php.ini-production \
+&&      echo 'alias ll="ls -lah"' >> ~/.bashrc \
+&&      echo 'alias vim="vi"' >> ~/.bashrc \
+&&      mkdir --parents /var/lib/php/sessions \
+&&      chown -R vairogs:vairogs /var/lib/php/sessions \
+&&      mkdir --parents /var/lib/php/opcache \
+&&      chown -R vairogs:vairogs /var/lib/php/opcache
+
+COPY    php-fpm.conf /usr/local/etc/php-fpm.conf
+COPY    www.conf /usr/local/etc/php-fpm.d/www.conf
+COPY    php.ini-development /usr/local/etc/php/php.ini
+COPY    10-opcache.ini /usr/local/etc/php/conf.d/docker-php-ext-opcache.ini
+
+RUN     \
+        set -eux \
+&&      chmod 644 /usr/local/etc/php/conf.d/docker-php-ext-opcache.ini
+
+WORKDIR /var/www/html
+
+USER    vairogs
+CMD     ["sh", "-c", "php-fpm && /bin/bash"]

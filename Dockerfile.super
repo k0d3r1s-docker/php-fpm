@@ -1,0 +1,20 @@
+FROM k0d3r1s/php-fpm:unstable
+
+USER    root
+
+COPY    ./supervisord/supervisord.conf /etc/supervisord.conf
+COPY    ./supervisord/* /etc/supervisord/conf.d/
+
+RUN     \
+        set -eux \
+&&      apk add --update --no-cache --no-progress --upgrade -X http://dl-cdn.alpinelinux.org/alpine/edge/testing supervisor inotify-tools \
+&&      mkdir --parents /var/log/php-fpm \
+&&      rm -rf \
+            /tmp/* \
+            /var/cache/* \
+            /etc/supervisord/conf.d/supervisord.conf \
+&&      chown -R vairogs:vairogs /var/log/php-fpm
+
+USER    vairogs
+
+ENTRYPOINT ["supervisord"]
