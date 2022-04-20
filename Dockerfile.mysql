@@ -1,8 +1,0 @@
-FROM    k0d3r1s/php-fpm:8.1.0
-
-RUN     \
-        set -eux \
-&&      wget -O /usr/local/bin/install-php-extensions https://github.com/mlocati/docker-php-extension-installer/releases/latest/download/install-php-extensions \
-&&      chmod -R 777 /usr/local/bin \
-&&      install-php-extensions mysqli pdo pdo_mysql \
-&&      rm -rf /usr/local/bin/install-php-extensions
