@@ -7,7 +7,7 @@ ENV     PHP_INI_DIR /usr/local/etc/php
 ENV     PHP_CFLAGS "-fstack-protector-strong -fpic -fpie -O2 -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64"
 ENV     PHP_CPPFLAGS "$PHP_CFLAGS"
 ENV     PHP_LDFLAGS "-Wl,-O1 -pie"
-ENV     PHP_VERSION ${version}
+ENV     PHP_VERSION 8.2.0-dev
 
 COPY    ping.sh /usr/local/bin/php-fpm-ping
 COPY    ./src/ /usr/src/php
@@ -27,7 +27,7 @@ RUN     \
         curl-dev dpkg librdkafka librdkafka-dev dpkg-dev file freetype freetype-dev g++ gcc git gnupg hiredis hiredis-dev icu icu-dev icu-libs imagemagick \
         bzip2 bzip2-dev gnu-libiconv-dev imagemagick-dev libc-dev libedit-dev libjpeg-turbo libjpeg-turbo-dev libpng libpng-dev libsodium-dev libtool gnu-libiconv \
         libwebp libwebp-dev libx11 libxau libxdmcp libxml2 libxml2-dev libxpm libxpm-dev libzip libzip-dev tidyhtml tidyhtml-dev gmp gmp-dev \
-        linux-headers make oniguruma-dev openssl openssl-dev pcre pcre-dev php81-dev php81-pear pinentry pkgconf libgomp libuv libuv-dev \
+        linux-headers make oniguruma-dev openssl openssl-dev pcre pcre-dev php81-dev php81-pear pinentry pkgconf libgomp libuv libuv-dev libevent-dev libev-dev libevent libev \
         postgresql-dev postgresql-libs re2c sqlite-dev tar xz zip zstd-dev zstd-libs openssh-client fcgi liblzf liblzf-dev bison lz4 lz4-dev lz4-libs \
 &&      wget -O /home/vairogs/installer https://getcomposer.org/installer \
 &&      wget -O /usr/local/bin/wait-for-it https://raw.githubusercontent.com/vishnubob/wait-for-it/master/wait-for-it.sh \
@@ -201,9 +201,29 @@ RUN     \
             &&  cd .. || exit \
         ) \
 &&      docker-php-ext-enable uv \
+&&      git clone --single-branch https://bitbucket.org/osmanov/pecl-event.git \
+&&      ( \
+            cd  pecl-event \
+            &&  phpize \
+            &&  ./configure --with-event-core --with-event-extra --with-event-openssl \
+            &&  make -j "$(expr $(nproc) / 2)" \
+            &&  make install \
+            &&  cd .. || exit \
+        ) \
+&&      docker-php-ext-enable event \
+&&      git clone --single-branch https://bitbucket.org/osmanov/pecl-ev.git \
+&&      ( \
+            cd  pecl-ev \
+            &&  phpize \
+            &&  ./configure --enable-ev \
+            &&  make -j "$(expr $(nproc) / 2)" \
+            &&  make install \
+            &&  cd .. || exit \
+        ) \
+&&      docker-php-ext-enable ev \
 &&      touch /var/www/html/config/preload.php \
 &&      apk del --purge --no-cache alpine-sdk argon2-dev autoconf coreutils curl-dev dpkg dpkg-dev file freetype-dev g++ gcc gnupg gnu-libiconv-dev \
-        hiredis-dev icu-dev imagemagick-dev libc-dev libedit-dev libjpeg-turbo-dev libpng-dev libsodium-dev tidyhtml-dev librdkafka-dev \
+        hiredis-dev icu-dev imagemagick-dev libc-dev libedit-dev libjpeg-turbo-dev libpng-dev libsodium-dev tidyhtml-dev librdkafka-dev libevent-dev libev-dev \
         libwebp-dev libx11-dev libxau-dev libxdmcp-dev libxml2-dev libxpm-dev libzip-dev linux-headers oniguruma-dev bison bzip2-dev  liburing-dev \
         openssl-dev pcre-dev php81-dev php81-pear pkgconf postgresql-dev re2c sqlite-dev zstd-dev liblzf-dev openssh* xz libuv-dev gmp-dev lz4-dev \
 &&      rm -rf \
@@ -240,9 +260,13 @@ COPY    10-opcache.ini /usr/local/etc/php/conf.d/docker-php-ext-opcache.ini
 
 RUN     \
         set -eux \
-&&      chmod 644 /usr/local/etc/php/conf.d/docker-php-ext-opcache.ini
+&&      chmod 644 /usr/local/etc/php/conf.d/docker-php-ext-opcache.ini \
+&&      echo zlib.output_compression = 4096 >> /usr/local/etc/php/conf.d/docker-php-ext-zlib.ini \
+&&      echo zlib.output_compression_level = 9 >> /usr/local/etc/php/conf.d/docker-php-ext-zlib.ini \
 
 WORKDIR /var/www/html
 
 USER    vairogs
 CMD     ["sh", "-c", "php-fpm && /bin/bash"]
+
+# grpc
