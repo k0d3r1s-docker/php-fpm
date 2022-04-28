@@ -262,7 +262,7 @@ RUN     \
         set -eux \
 &&      chmod 644 /usr/local/etc/php/conf.d/docker-php-ext-opcache.ini \
 &&      echo zlib.output_compression = 4096 >> /usr/local/etc/php/conf.d/docker-php-ext-zlib.ini \
-&&      echo zlib.output_compression_level = 9 >> /usr/local/etc/php/conf.d/docker-php-ext-zlib.ini \
+&&      echo zlib.output_compression_level = 9 >> /usr/local/etc/php/conf.d/docker-php-ext-zlib.ini
 
 WORKDIR /var/www/html
 

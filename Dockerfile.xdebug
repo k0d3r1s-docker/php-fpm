@@ -43,3 +43,5 @@ RUN     \
             /usr/local/bin/docker-php-ext-enable
 
 USER    vairogs
+
+WORKDIR /var/www/html
